@@ -1,0 +1,11 @@
+{
+	"single": true,
+	"array": [
+		1, 2, 3.5, 1e10
+	],
+	"object": {
+		"field": "value",
+		"empty array": [],
+		"array_of_empty_objects": [ {}, {}, {}, {} ]
+	}
+}
