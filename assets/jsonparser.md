@@ -213,8 +213,8 @@ impl<R: Read> Lexer<R> {
     pub fn new(input: R) -> Self {
         Lexer {
             input,
-            line: 0,
-            col: 0,
+            line: 1,
+            col: 1,
         }
     }
 
@@ -227,7 +227,7 @@ then, a simple method for reporting them and exiting gracefully (not exactly):
 impl<R: Read> Lexer<R> {
     // ...
 
-    fn error(&mut self, msg: &str) {
+    fn error(&mut self, msg: String) -> ! {
         println!("error: {msg}");
         println!("at {}, {}", self.line, self.col);
         std::process::exit(-1);
@@ -237,7 +237,11 @@ impl<R: Read> Lexer<R> {
 }
 ```
 
-the `line` and `col` offsets are going to be changed in `Lexer::next`, while skipping whitespace.
+I recently learned about `!`... it's apparently a type you return when your function or block or whatever isn't ever going to return.
+
+it's different from `()` in that that is a valid type to be returned, but `!` just straight up says "you're never getting a value from me".
+
+anyways, the `line` and `col` offsets are going to be changed in `Lexer::next`, while skipping whitespace.
 
 I also conveniently forgot to skip whitespace, so there's that.
 
@@ -276,5 +280,61 @@ impl<R: Read> Iterator for Lexer<R> {
             // ...
         }
     }
+}
+```
+
+now, replace all `panic!` calls with `self.error` calls.
+
+```rust
+fn check_id(&mut self, c: char) -> Token {
+    // ...
+
+    match s.as_str() {
+        // ...
+        _ => self.error(format!("expected true, false or null, got {s}")),
+    }
+}
+```
+
+```rust
+impl<R: Read> Iterator for Lexer<R> {
+    fn next(&mut self) -> Option<Token> {
+        // ...
+
+        match start {
+            // ...
+            c => self.error(format!("unexpected character {c}"))
+        }
+    }
+}
+```
+
+up in this point, I realize I need a `Lexer::peek_char` method, as using `Lexer::read_char` is bound to fail if, for example, a `true` is scanned, as it can potentially skip another important character, such as `"` or `{`/`[`. no sane encoder usually outputs JSON without some whitespace, but there *are* such cases, and people happen to also write JSON files manually...
+
+```rust
+impl<R: Read> Lexer<R> {
+    //...
+
+    fn read_char(&mut self) -> Option<char> {
+        if self.stored_char.is_some() {
+            mem::replace(&mut self.stored_char, None)
+        } else {
+            let mut buf = [0];
+            if self.input.read(&mut buf).is_ok() {
+                Some(buf[0] as char)
+            } else {
+                None
+            }
+        }
+    }
+
+    fn peek_char(&mut self) -> &Option<char> {
+        if self.stored_char.is_none() {
+            self.stored_char = self.read_char()
+        }
+        &self.stored_char
+    }
+
+    // ...
 }
 ```
