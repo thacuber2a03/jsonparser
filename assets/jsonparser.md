@@ -4,7 +4,7 @@ name: a Rust noob writes a JSON lexer
 
 # a Rust noob writes a JSON lexer
 
-so you want to write a JSON lexer in Rust? ...yeah, me too.
+so you want to write a JSON lexer in Rust? ...yeah, me too. I'm just documenting how I'm doing it.
 [I've already written one or two compilers before](https://github.com/thacuber2a03/fe2lua), so I know what I'm doing. sorta.
 
 I'll be following the specifcation listed in [the format's official page](https://json.org). funny how it's literally the main thing you see when you open the page.
@@ -460,7 +460,7 @@ impl<R: Read> Lexer<R> {
                 'n' => '\n',
                 'r' => '\r',
                 't' => '\t',
-                'u' => {
+                'u' => { // I've no idea if this works yet
                     let mut s = String::new();
                     for _ in 0..4 {
                         match self.peek_char() {
