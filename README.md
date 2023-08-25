@@ -1,5 +1,5 @@
 # jsonparser
-the JSON soon-to-be-parser I wrote on my page.
+the JSON soon-to-be-parser I wrote for the article on my page.
 
 this can probably be optimized, but for being my first Rust project, it's really damn cool
 
