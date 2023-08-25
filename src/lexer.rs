@@ -1,4 +1,4 @@
-use std::{io::Read, mem};
+use std::io::Read;
 
 #[derive(Debug)]
 pub enum Token {
@@ -38,14 +38,13 @@ impl<R: Read> Lexer<R> {
     }
 
     fn error(&mut self, msg: String) -> ! {
-        println!("error: {msg}");
-        println!("at {}, {}", self.line, self.col);
+        println!("error: {msg}, at {}, {}", self.line, self.col);
         std::process::exit(-1);
     }
 
     fn read_char(&mut self) -> Option<char> {
         if self.stored_char.is_some() {
-            mem::replace(&mut self.stored_char, None)
+            self.stored_char.take()
         } else {
             let mut buf = [0];
             if self.input.read(&mut buf).is_ok() {
@@ -65,9 +64,12 @@ impl<R: Read> Lexer<R> {
 
     fn check_id(&mut self, c: char) -> Token {
         let mut s = String::from(c);
-        match self.peek_char() {
-            Some(_) => s.push(self.read_char().unwrap()),
-            None => self.error(format!("expected true, false or null, got {s}")),
+        loop {
+            match self.peek_char() {
+                Some(c) if !c.is_alphabetic() => break,
+                Some(_) => s.push(self.read_char().unwrap()),
+                None => self.error("expected true, false or null, got end of file".to_string()),
+            }
         }
 
         match s.as_str() {
@@ -78,52 +80,56 @@ impl<R: Read> Lexer<R> {
         }
     }
 
-    fn peek(&mut self) -> &Option<Token> {
-        if self.stored.is_none() {
-            self.stored = self.do_next();
-        }
-        &self.stored
-    }
-
-    fn do_next(&mut self) -> Option<Token> {
-        let start: Option<char>;
-        loop {
-            match self.read_char() {
-                Some(c) => {
-                    match c {
-                        ' ' | '\r' | '\t' => {
-                            self.col += 1;
-                            return self.next(); // yay, recursion
-                        }
-                        '\n' => {
-                            self.line += 1;
-                            self.col = 1;
-                            // yay, even more recursion
-                            // (I really hope this is tail-call optimized :sweating:)
-                            return self.next();
-                        }
-                        c => {
-                            start = Some(c);
-                            break;
+    fn read_escape(&mut self) -> char {
+        match self.read_char() {
+            None => self.error("expected an escapable character, got end of file".to_string()),
+            Some(c) => match c {
+                '"' => '"',
+                '\\' => '\\',
+                '/' => '/', // what
+                'b' => '\x08',
+                'f' => '\x0c',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'u' => { // the hardest of them all
+                    let mut s = String::new();
+                    for _ in 0..4 {
+                        match self.peek_char() {
+                            None => self.error("expected a hex digits, got end of file".to_string()),
+                            Some(c) if c.is_ascii_hexdigit() => s.push(self.read_char().unwrap()),
+                            Some(c) => {
+                                let c = *c;
+                                self.error(format!("expected a hex digit, got {c}"));
+                            }
                         }
                     }
+
+                    match s.parse::<char>() {
+                        Ok(c) => c,
+                        Err(e) => self.error(format!("{e}")), // should probably change this one
+                    }
                 }
-                None => return None,
+                _ => self.error(format!("invalid escape character {c}"))
             }
         }
+    }
 
-        match start {
-            Some(c) => Some(match c {
-                '{' => Token::LBrace,
-                '}' => Token::RBrace,
-                '[' => Token::LBracket,
-                ']' => Token::RBracket,
-                ',' => Token::Comma,
-                ':' => Token::Colon,
-                't' | 'f' | 'n' => self.check_id(c),
-                c => self.error(format!("unexpected character {c}")),
-            }),
-            None => None,
+    fn scan_string(&mut self) -> Token {
+        let mut s = String::new();
+        loop {
+            match self.peek_char() {
+                Some('"') => {
+                    self.read_char();
+                    break Token::String(s)
+                }
+                Some('\\') => {
+                    self.read_char();
+                    s.push(self.read_escape());
+                }
+                Some(_) => s.push(self.read_char().unwrap()),
+                None => self.error("expected a closing quote, got end of file".to_string())
+            }
         }
     }
 }
@@ -131,11 +137,37 @@ impl<R: Read> Lexer<R> {
 impl<R: Read> Iterator for Lexer<R> {
     type Item = Token;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.stored.is_some() {
-            mem::replace(&mut self.stored, None)
-        } else {
-            self.do_next()
+    fn next(&mut self) -> Option<Token> {
+        loop {
+            match self.peek_char() {
+                Some(c) => {
+                    match c {
+                        ' ' | '\r' | '\t' => {
+                            self.col += 1;
+                            self.read_char();
+                        }
+                        '\n' => {
+                            self.line += 1;
+                            self.col = 1;
+                            self.read_char();
+                        }
+                        _ => break,
+                    }
+                }
+                None => return None,
+            }
         }
+
+        self.read_char().map(|c| match c {
+            '{' => Token::LBrace,
+            '}' => Token::RBrace,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
+            ',' => Token::Comma,
+            ':' => Token::Colon,
+            't' | 'f' | 'n' => self.check_id(c),
+            '"' => self.scan_string(),
+            c => self.error(format!("unexpected character {c}")),
+        })
     }
 }

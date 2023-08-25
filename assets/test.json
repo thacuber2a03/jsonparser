@@ -1,11 +1,14 @@
 {
-	"single": true,
-	"array": [
-		1, 2, 3.5, 1e10
-	],
+	"number": 1,
+	"boolean": true,
+	"array_of_numbers": [ 1, 2, 3.5, 1e10 ],
 	"object": {
 		"field": "value",
-		"empty array": [],
+		"array_of_strings_with_escape_sequences": [
+			"hello\"world", "hello\\world", "hello\/world",
+			"hello\bworld", "hello\fworld", "hello\nworld",
+			"hello\rworld", "hello\tworld", "hello\u00f1world"
+		],
 		"array_of_empty_objects": [ {}, {}, {}, {} ]
 	}
 }

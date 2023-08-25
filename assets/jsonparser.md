@@ -1,9 +1,16 @@
-# a Rust noob writes a JSON parser
+---
+name: a Rust noob writes a JSON lexer
+---
 
-so you want to write a JSON parser in Rust? ...yeah, me too.
+# a Rust noob writes a JSON lexer
+
+so you want to write a JSON lexer in Rust? ...yeah, me too.
 [I've already written one or two compilers before](https://github.com/thacuber2a03/fe2lua), so I know what I'm doing. sorta.
 
-I started with a simple frontend:
+I'll be following the specifcation listed in [the format's official page](https://json.org). funny how it's literally the main thing you see when you open the page.
+
+I'll just make a simple frontend for now.
+
 ```rust
 use std::env;
 use std::process;
@@ -29,7 +36,7 @@ fn main() -> io::Result<()> {
 }
 ```
 
-now, onto the lexer:
+now, onto the actual thing:
 
 ```rust
 use std::io::Read;
@@ -165,14 +172,18 @@ impl<R: Read> Lexer<R> {
 
 next, `true`, `false` and `null`:
 ```rust
-fn next(&mut self) -> Option<Self::Item> {
-    match self.read_char() {
-        Some(c) => Some(match c {
+impl<R> Iterator for Lexer<R> {
+    // ...
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.read_char() {
+            Some(c) => Some(match c {
+                // ...
+                't' | 'f' | 'n' => self.check_id(c),
+                // ...
+            }),
             // ...
-            't' | 'f' | 'n' => self.check_id(c),
-            // ...
-        }),
-        // ...
+        }
     }
 }
 ```
@@ -180,11 +191,12 @@ fn next(&mut self) -> Option<Self::Item> {
 another helper method:
 ```rust
 fn check_id(&mut self, c: char) -> Token {
-    let s = String::from(c);
-    while let c = self.read_char() {
-        match c {
-            Some(c) => s.push(c),
-            None => panic!("expected true, false or null, got {s}")
+    let mut s = String::from(c);
+    loop {
+        match self.peek_char() {
+            Some(c) if !c.is_alphabetic() => break,
+            Some(_) => s.push(self.read_char().unwrap()),
+            None => panic!("expected true, false or null, got end of file"),
         }
     }
 
@@ -192,7 +204,7 @@ fn check_id(&mut self, c: char) -> Token {
         "true" => Token::True,
         "false" => Token::False,
         "null" => Token::Null,
-        _ => panic!("expected true, false or null, got {s}")
+        _ => panic!("expected true, false or null, got {s}"),
     }
 }
 ```
@@ -228,8 +240,7 @@ impl<R: Read> Lexer<R> {
     // ...
 
     fn error(&mut self, msg: String) -> ! {
-        println!("error: {msg}");
-        println!("at {}, {}", self.line, self.col);
+        println!("error: {msg}, at {}, {}", self.line, self.col);
         std::process::exit(-1);
     }
 
@@ -257,22 +268,18 @@ impl<R: Read> Iterator for Lexer<R> {
                     match c {
                         ' ' | '\r' | '\t' => {
                             self.col += 1;
-                            return self.next() // yay, recursion
                         }
                         '\n' => {
                             self.line += 1;
                             self.col = 1;
-                            // yay, even more recursion
-                            // (I really hope this is tail-call optimized :sweating:)
-                            return self.next()
                         }
                         c => {
                             start = Some(c);
                             break
                         }
                     }
-                },
-                None => return None
+                }
+                None => return None,
             }
         }
 
@@ -288,6 +295,12 @@ now, replace all `panic!` calls with `self.error` calls.
 ```rust
 fn check_id(&mut self, c: char) -> Token {
     // ...
+    loop {
+        match self.next_char() {
+            // ...
+            None => self.error("expected true, false or null, got end of file".to_string()),
+        }
+    }
 
     match s.as_str() {
         // ...
@@ -298,6 +311,8 @@ fn check_id(&mut self, c: char) -> Token {
 
 ```rust
 impl<R: Read> Iterator for Lexer<R> {
+    // ...
+
     fn next(&mut self) -> Option<Token> {
         // ...
 
@@ -309,7 +324,7 @@ impl<R: Read> Iterator for Lexer<R> {
 }
 ```
 
-up in this point, I realize I need a `Lexer::peek_char` method, as using `Lexer::read_char` is bound to fail if, for example, a `true` is scanned, as it can potentially skip another important character, such as `"` or `{`/`[`. no sane encoder usually outputs JSON without some whitespace, but there *are* such cases, and people happen to also write JSON files manually...
+at this point, I realize I need a `Lexer::peek_char` method, as using `Lexer::read_char` over at `Lexer::check_id` is bound to break down if, well, *anything* is scanned, as it can potentially skip another important character, such as `"` or `{`/`[`. no sane encoder outputs JSON without some whitespace, but there *are* such encoders, and people happen to also write JSON files manually, soooo...
 
 ```rust
 impl<R: Read> Lexer<R> {
@@ -336,5 +351,152 @@ impl<R: Read> Lexer<R> {
     }
 
     // ...
+}
+```
+
+now, it's just fixing `Lexer::check_id`...
+
+```rust
+impl<R: Read> Lexer<R> {
+    // ...
+
+    fn check_id(&mut self, c: char) -> Token {
+        // ...
+        loop {
+            match self.peek_char() {
+                // ...
+            }
+        }
+        // ...
+    }
+
+    // ...
+}
+```
+
+and now that we're at it, rewrite the whitespace skip loop:
+
+```rust
+impl<R: Read> Iterator for Lexer<R> {
+    // ...
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.peek_char() {
+                Some(c) => {
+                    match c {
+                        ' ' | '\r' | '\t' => {
+                            self.col += 1;
+                            self.read_char();
+                        }
+                        '\n' => {
+                            self.line += 1;
+                            self.col = 1;
+                            self.read_char();
+                        }
+                        _ => break,
+                    }
+                }
+                None => return None,
+            }
+        }
+
+        match self.read_char() {
+            // ...
+        }
+    }
+}
+```
+
+and now, the stars of the show: numbers and strings.
+
+```rust
+impl<R: Read> Iterator for Lexer<R> {
+    // ...
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match start {
+            // ...
+            '"' => self.scan_string(),
+        }
+    }
+}
+```
+
+this method doesn't recieve any arguments because, well, how else do you start strings in JSON
+
+```rust
+impl<R: Read> Lexer<R> {
+    // ...
+
+    fn scan_string(&mut self) -> Token {
+        let mut s = String::new();
+        loop {
+            match self.peek_char() {
+                Some('"') => break Token::String(s),
+                Some('\\') => s.push(self.read_escape()),
+                Some(_) => s.push(self.read_char().unwrap()),
+                None => self.error("expected a closing quote, got end of file").to_string()),
+            }
+        }
+    }
+
+    // ...
+}
+```
+
+aaaand another helper method for reading escape sequences.
+
+```rust
+impl<R: Read> Lexer<R> {
+    fn read_escape(&mut self) -> char {
+        match self.read_char() {
+            None => self.error("expected an escapable character, got end of file".to_string()),
+            Some(c) => match c {
+                '"' => '"',
+                '\\' => '\\',
+                '/' => '/', // why is this in the spec
+                'b' => '\x08',
+                'f' => '\x0c',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'u' => {
+                    let mut s = String::new();
+                    for _ in 0..4 {
+                        match self.peek_char() {
+                            None => self.error("expected a hex digits, got end of file".to_string()),
+                            Some(c) if c.is_ascii_hexdigit() => s.push(self.read_char().unwrap()),
+                            Some(c) => {
+                                let c = *c;
+                                self.error(format!("expected a hex digit, got {c}"));
+                            }
+                        }
+                    }
+
+                    match s.parse::<char>() {
+                        Ok(c) => c,
+                        Err(e) => self.error(format!("{e}")), // should probably change this one
+                    }
+                }
+                _ => self.error(format!("invalid escape character {c}"))
+            }
+        }
+    }
+}
+```
+
+...and it's over here I discover `Option::map`. oh well.
+
+```rust
+impl<R: Read> Iterator for Lexer<R> {
+    // ...
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        // ...
+
+        self.read_char().map(|c| match c {
+            // ...
+        })
+    }
 }
 ```
