@@ -1,4 +1,4 @@
-use std::io::{Read, SeekFrom};
+use std::{io::Read, mem};
 
 #[derive(Debug)]
 pub enum Token {
@@ -51,23 +51,25 @@ impl<R: Read> Lexer<R> {
     }
 
     fn check_id(&mut self, c: char) -> Token {
-        let s = String::from(c);
-        while let c = self.read_char() {
-            match c {
-                Some(c) => s.push(c),
-                None => panic!("expected true, false or null, got {s}")
-            }
+        let mut s = String::from(c);
+        match self.peek() {
+            Some(c) => s.push(c),
+            None => panic!("expected true, false or null, got {s}"),
         }
 
         match s.as_str() {
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
-            _ => panic!("expected true, false or null, got {s}")
+            _ => panic!("expected true, false or null, got {s}"),
         }
     }
 
-    fn do_next() {
+    fn peek(&mut self) -> Option<Token> {
+        todo!();
+    }
+
+    fn do_next(&mut self) -> Option<Token> {
         let start: Option<char>;
         loop {
             match self.read_char() {
@@ -75,22 +77,22 @@ impl<R: Read> Lexer<R> {
                     match c {
                         ' ' | '\r' | '\t' => {
                             self.col += 1;
-                            return self.next() // yay, recursion
+                            return self.next(); // yay, recursion
                         }
                         '\n' => {
                             self.line += 1;
                             self.col = 1;
                             // yay, even more recursion
                             // (I really hope this is tail-call optimized :sweating:)
-                            return self.next()
+                            return self.next();
                         }
                         c => {
                             start = Some(c);
-                            break
+                            break;
                         }
                     }
-                },
-                None => return None
+                }
+                None => return None,
             }
         }
 
@@ -114,6 +116,10 @@ impl<R: Read> Iterator for Lexer<R> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.do_next()
+        if self.stored.is_some() {
+            mem::replace(&mut self.stored, None)
+        } else {
+            self.do_next()
+        }
     }
 }
