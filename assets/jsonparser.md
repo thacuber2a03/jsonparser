@@ -240,7 +240,7 @@ impl<R: Read> Lexer<R> {
     // ...
 
     fn error(&mut self, msg: String) -> ! {
-        println!("error: {msg}, at {}, {}", self.line, self.col);
+        println!("error: {msg} at ({}, {})", self.line, self.col);
         std::process::exit(-1);
     }
 
@@ -318,7 +318,7 @@ impl<R: Read> Iterator for Lexer<R> {
 
         match start {
             // ...
-            c => self.error(format!("unexpected character {c}"))
+            c => self.error(format!("unexpected character {c} (code {})", c as u8))
         }
     }
 }
@@ -382,19 +382,17 @@ impl<R: Read> Iterator for Lexer<R> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.peek_char() {
-                Some(c) => {
-                    match c {
-                        ' ' | '\r' | '\t' => {
-                            self.col += 1;
-                            self.read_char();
-                        }
-                        '\n' => {
-                            self.line += 1;
-                            self.col = 1;
-                            self.read_char();
-                        }
-                        _ => break,
+                Some(c) => match c {
+                    ' ' | '\r' | '\t' => {
+                        self.col += 1;
+                        self.read_char();
                     }
+                    '\n' => {
+                        self.line += 1;
+                        self.col = 1;
+                        self.read_char();
+                    }
+                    _ => break,
                 }
                 None => return None,
             }
@@ -500,3 +498,178 @@ impl<R: Read> Iterator for Lexer<R> {
     }
 }
 ```
+
+and finally, numbers:
+
+```rust
+impl<R: Read> Lexer<R> {
+    // ...
+
+    fn scan_number(&mut self, n: char) -> Token {
+        let mut s = String::from(n);
+        while let Some(c) = self.read_char() {
+            match c {
+                c if c.is_ascii_digit() => s.push(c),
+                '-' | '+' | 'E' | 'e' | '.' => s.push(c),
+                _ => break,
+            }
+        }
+
+        if s.is_empty() {
+            panic!("what");
+        } else {
+            match s.parse() {
+                Ok(n) => Token::Number(n),
+                Err(e) => self.error(e.to_string()),
+            }
+        }
+    }
+
+    // ...
+}
+```
+
+I'm going to let Rust's number parser do the parsing for now, but I should definitely parse it manually later.
+
+and it's at this moment I realize I could modify `line` and `col` in `Lexer::read_char`. yeah.
+
+```rust
+impl<R: Read> Iterator for Lexer<R> {
+    // ...
+
+    fn next(&mut self) -> Option<Token> {
+        loop {
+            match self.peek_char() {
+                Some(c) => match c {
+                    c if c.is_ascii_whitespace() => self.read_char(),
+                    _ => break,
+                },
+                None => return None,
+            };
+        }
+
+        // ...
+    }
+}
+```
+
+```rust
+impl<R: Read> Lexer<R> {
+    fn read_char(&mut self) -> Option<char> {
+        let c = if self.stored_char.is_some() {
+            self.stored_char.take().unwrap()
+        } else {
+            let mut buf = [0];
+            if self.input.read(&mut buf).is_ok() {
+                buf[0] as char
+            } else {
+                return None
+            }
+        };
+
+        match c {
+            '\n' => {
+                self.line += 1;
+                self.col = 1;
+            }
+            _ => self.col += 1
+        }
+
+        Some(c)
+    }
+}
+```
+
+and yeah, that would be everything for this lexer! let's try it...
+
+test file:
+```json
+{
+	"number": 1,
+	"boolean": true,
+	"array_with_stuff": [ 1, false, null, {} ]
+}
+```
+
+output:
+
+```
+$ cargo run assets/test.json
+   Compiling jsonparser v0.1.0 (/home/thacuber2a03/Documentos/code/rust/jsonparser)
+    Finished dev [unoptimized + debuginfo] target(s) in 1.33s
+     Running `target/debug/jsonparser assets/test.json`
+LBrace
+String("number")
+Colon
+Number(1.0)
+String("boolean")
+Colon
+True
+Comma
+String("array_with_stuff")
+Colon
+LBracket
+Number(1.0)
+False
+Comma
+Null
+Comma
+LBrace
+RBrace
+RBracket
+RBrace
+error: unexpected character (NUL) (code 0), at (11, 3)
+```
+
+...
+
+I'll just hardcode a special case for NUL.
+
+```
+impl<R: Read> Iterator for Lexer<R> {
+    // ...
+    
+    fn next(&mut self) -> Option<Token> {
+        // ...
+
+        if self.peek_char().is_some_and(|c| c == '\0') {
+            return None
+        }
+
+        // ...
+    }
+}
+```
+
+again...
+
+```
+$ cargo run assets/test.json
+    Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/jsonparser assets/test.json`
+LBrace
+String("number")
+Colon
+Number(1.0)
+String("boolean")
+Colon
+True
+Comma
+String("array_with_stuff")
+Colon
+LBracket
+Number(1.0)
+False
+Comma
+Null
+Comma
+LBrace
+RBrace
+RBracket
+RBrace
+```
+
+and this time, it works!
+
+well, that's all for this article. the code will be [hosted in my GitHub](https://github.com/thacuber2a03/jsonparser). next time I'll make the parser. cya.
+

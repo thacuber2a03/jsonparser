@@ -30,29 +30,39 @@ impl<R: Read> Lexer<R> {
     pub fn new(input: R) -> Self {
         Lexer {
             input,
-            line: 0,
-            col: 0,
+            line: 1,
+            col: 1,
             stored: None,
             stored_char: None,
         }
     }
 
     fn error(&mut self, msg: String) -> ! {
-        println!("error: {msg}, at {}, {}", self.line, self.col);
+        println!("error: {msg}, at ({}, {})", self.line, self.col);
         std::process::exit(-1);
     }
 
     fn read_char(&mut self) -> Option<char> {
-        if self.stored_char.is_some() {
-            self.stored_char.take()
+        let c = if self.stored_char.is_some() {
+            self.stored_char.take().unwrap()
         } else {
             let mut buf = [0];
             if self.input.read(&mut buf).is_ok() {
-                Some(buf[0] as char)
+                buf[0] as char
             } else {
-                None
+                return None;
             }
+        };
+
+        match c {
+            '\n' => {
+                self.line += 1;
+                self.col = 1;
+            }
+            _ => self.col += 1,
         }
+
+        Some(c)
     }
 
     fn peek_char(&mut self) -> &Option<char> {
@@ -92,11 +102,14 @@ impl<R: Read> Lexer<R> {
                 'n' => '\n',
                 'r' => '\r',
                 't' => '\t',
-                'u' => { // the hardest of them all
+                'u' => {
+                    // the hardest of them all
                     let mut s = String::new();
                     for _ in 0..4 {
                         match self.peek_char() {
-                            None => self.error("expected a hex digits, got end of file".to_string()),
+                            None => {
+                                self.error("expected a hex digits, got end of file".to_string())
+                            }
                             Some(c) if c.is_ascii_hexdigit() => s.push(self.read_char().unwrap()),
                             Some(c) => {
                                 let c = *c;
@@ -110,8 +123,8 @@ impl<R: Read> Lexer<R> {
                         Err(e) => self.error(format!("{e}")), // should probably change this one
                     }
                 }
-                _ => self.error(format!("invalid escape character {c}"))
-            }
+                _ => self.error(format!("invalid escape character {c}")),
+            },
         }
     }
 
@@ -121,14 +134,34 @@ impl<R: Read> Lexer<R> {
             match self.peek_char() {
                 Some('"') => {
                     self.read_char();
-                    break Token::String(s)
+                    break Token::String(s);
                 }
                 Some('\\') => {
                     self.read_char();
                     s.push(self.read_escape());
                 }
                 Some(_) => s.push(self.read_char().unwrap()),
-                None => self.error("expected a closing quote, got end of file".to_string())
+                None => self.error("expected a closing quote, got end of file".to_string()),
+            }
+        }
+    }
+
+    fn scan_number(&mut self, n: char) -> Token {
+        let mut s = String::from(n);
+        while let Some(c) = self.read_char() {
+            match c {
+                c if c.is_ascii_digit() => s.push(c),
+                '-' | '+' | 'E' | 'e' | '.' => s.push(c),
+                _ => break,
+            }
+        }
+
+        if s.is_empty() {
+            panic!("what");
+        } else {
+            match s.parse() {
+                Ok(n) => Token::Number(n),
+                Err(e) => self.error(e.to_string()),
             }
         }
     }
@@ -140,22 +173,16 @@ impl<R: Read> Iterator for Lexer<R> {
     fn next(&mut self) -> Option<Token> {
         loop {
             match self.peek_char() {
-                Some(c) => {
-                    match c {
-                        ' ' | '\r' | '\t' => {
-                            self.col += 1;
-                            self.read_char();
-                        }
-                        '\n' => {
-                            self.line += 1;
-                            self.col = 1;
-                            self.read_char();
-                        }
-                        _ => break,
-                    }
-                }
+                Some(c) => match c {
+                    c if c.is_ascii_whitespace() => self.read_char(),
+                    _ => break,
+                },
                 None => return None,
-            }
+            };
+        }
+
+        if self.peek_char().is_some_and(|c| c == '\0') {
+            return None
         }
 
         self.read_char().map(|c| match c {
@@ -167,7 +194,11 @@ impl<R: Read> Iterator for Lexer<R> {
             ':' => Token::Colon,
             't' | 'f' | 'n' => self.check_id(c),
             '"' => self.scan_string(),
-            c => self.error(format!("unexpected character {c}")),
+            '-' => self.scan_number(c),
+            c if c.is_ascii_digit() => self.scan_number(c),
+            c => {
+                self.error(format!("unexpected character {c} (code {})", c as u8))
+            }
         })
     }
 }
