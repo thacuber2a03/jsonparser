@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod lexer;
+mod parser;
 
 use std::env;
 use std::fs::File;
@@ -8,6 +9,7 @@ use std::io::{self, BufReader};
 use std::process;
 
 use lexer::Lexer;
+use parser::Parser;
 
 fn main() -> io::Result<()> {
     let argv: Vec<String> = env::args().collect();
@@ -19,10 +21,8 @@ fn main() -> io::Result<()> {
     let f = File::open(&argv[1])?;
     let r = BufReader::new(f);
     let lexer = Lexer::new(r);
-
-    for token in lexer {
-        println!("{token:?}");
-    }
+    let parser = Parser::new(l);
+    println!("{}", parser.parse())
 
     Ok(())
 }
