@@ -72,6 +72,6 @@ pub enum Value {
 }
 {% endhighlight %}
 
-it's not too big. I thought on using `Option<Value>` everywhere, but that would just be tedious pattern matching at *best**.
+it's not too big. I thought on using `Option<Value>` everywhere, but that would just be tedious pattern matching *at best*.
 
 I'll be mostly mirroring the spec here, so nothing very interesting will be going on.
