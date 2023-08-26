@@ -15,6 +15,5 @@ impl<R: Read> Parser<R> {
     }
 
     pub fn parse(&mut self) -> Option<Value> {
-        None
     }
 }
