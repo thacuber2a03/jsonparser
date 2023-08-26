@@ -2,6 +2,7 @@
 
 mod lexer;
 mod parser;
+mod value;
 
 use std::env;
 use std::fs::File;
@@ -21,8 +22,8 @@ fn main() -> io::Result<()> {
     let f = File::open(&argv[1])?;
     let r = BufReader::new(f);
     let lexer = Lexer::new(r);
-    let parser = Parser::new(l);
-    println!("{}", parser.parse())
+    let parser = Parser::new(lexer);
+    println!("{}", parser.parse());
 
     Ok(())
 }
