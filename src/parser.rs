@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use crate::lexer::Lexer;
+use crate::lexer::{Lexer, Token};
 use crate::value::Value;
 
 pub struct Parser<R> {
@@ -15,5 +15,18 @@ impl<R: Read> Parser<R> {
     }
 
     pub fn parse(&mut self) -> Option<Value> {
+        self.lexer.next().map(|t| match t {
+            Token::LBrace => self.object(),
+            Token::LBracket => self.array(),
+            t => panic!("unexpected token {:?}", t),
+        })
+    }
+
+    fn array(&mut self) -> Value {
+        Value::Null
+    }
+
+    fn object(&mut self) -> Value {
+        Value::Null
     }
 }

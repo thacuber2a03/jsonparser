@@ -6,7 +6,7 @@ permalink: /jsonparser
 
 # {{ page.title }}
 
-hello again. if you don't know why I'm welcoming you as if you had been in this site already, you should go check [the other part](/jsonlexer).
+hello again. if you're wondering why I'm welcoming you as if you had been in this site already, you should go check [the other part](/jsonlexer).
 
 anyways, a JSON parser. doesn't seem that hard.
 
@@ -24,8 +24,7 @@ fn main() -> io::Result<()> {
 
     let parser = Parser::new(lexer);
     println!("{}", parser.parse());
-
-    // remove the token loop if you come from the lexer
+    // remove the token loop if you come from the lexer article
 
     Ok(())
 }
@@ -51,6 +50,7 @@ impl<R: Read> Parser<R> {
     }
 
     pub fn parse(&mut self) -> Option<Value> {
+        todo!();
     }
 }
 {% endhiglight %}
@@ -63,6 +63,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum Value {
+    Null,
     Number(f32),
     String(String),
     Boolean(bool),
@@ -71,4 +72,6 @@ pub enum Value {
 }
 {% endhighlight %}
 
-not too big.
+it's not too big. I thought on using `Option<Value>` everywhere, but that would just be tedious pattern matching at *best**.
+
+I'll be mostly mirroring the spec here, so nothing very interesting will be going on.
