@@ -148,10 +148,10 @@ impl<R: Read> Lexer<R> {
 
     fn scan_number(&mut self, n: char) -> Token {
         let mut s = String::from(n);
-        while let Some(c) = self.read_char() {
+        while let Some(c) = self.peek_char() {
             match c {
-                c if c.is_ascii_digit() => s.push(c),
-                '-' | '+' | 'E' | 'e' | '.' => s.push(c),
+                c if c.is_ascii_digit() => s.push(self.read_char().unwrap()),
+                '-' | '+' | 'E' | 'e' | '.' => s.push(self.read_char().unwrap()),
                 _ => break,
             }
         }

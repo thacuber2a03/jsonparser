@@ -11,6 +11,7 @@ pub struct Parser<R> {
 impl<R: Read> Parser<R> {
     pub fn new(lexer: Lexer<R>) -> Self {
         Parser {
+            stored: None,
             lexer,
         }
     }
@@ -24,21 +25,41 @@ impl<R: Read> Parser<R> {
     }
 
     fn array(&mut self) -> Value {
-        let v = vec![self.value()];
+        let mut v = vec![self.value()];
 
         while let &Some(Token::Comma) = self.peek() {
-            self.next();
+            match self.next() {
+                Some(_) => (),
+                None => panic!("what"),
+            }
+            v.push(self.value());
+        }
+
+        if let Some(Token::RBracket) = self.peek() {
+
+        } else {
+            panic!("expected right bracket at end of array");
         }
 
         Value::Array(v)
     }
-    
+
     fn object(&mut self) -> Value {
         Value::Null
     }
 
     fn value(&mut self) -> Value {
-        Value::Null
+        match self.next() {
+            Some(t) => match t {
+                Token::String(s) => Value::String(s),
+                Token::Number(n) => Value::Number(n),
+                Token::True => Value::Boolean(true),
+                Token::False => Value::Boolean(false),
+                Token::Null => Value::Null,
+                t => panic!("unexpected token {t:?}"),
+            }
+            None => panic!("expected value"),
+        }
     }
 
     fn peek(&mut self) -> &Option<Token> {

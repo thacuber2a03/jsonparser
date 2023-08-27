@@ -21,7 +21,7 @@ fn main() -> io::Result<()> {
 
     let f = File::open(&argv[1])?;
     let r = BufReader::new(f);
-    let mut lexer = Lexer::new(r);
+    let lexer = Lexer::new(r);
     let mut parser = Parser::new(lexer);
 
     match parser.parse() {
