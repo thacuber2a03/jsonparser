@@ -24,33 +24,27 @@ impl<R: Read> Parser<R> {
         })
     }
 
+    fn object(&mut self) -> Value {
+        Value::Null
+    }
+
     fn array(&mut self) -> Value {
         let mut v = vec![self.value()];
 
         while let &Some(Token::Comma) = self.peek() {
-            match self.next() {
-                Some(_) => (),
-                None => panic!("what"),
-            }
+            let Some(_) = self.next() else { panic!("what"); };
             v.push(self.value());
         }
 
-        if let Some(Token::RBracket) = self.peek() {
-
-        } else {
-            panic!("expected right bracket at end of array");
-        }
+        let Some(Token::RBracket) = self.peek() else { panic!("expected ']' at end of array"); };
 
         Value::Array(v)
-    }
-
-    fn object(&mut self) -> Value {
-        Value::Null
     }
 
     fn value(&mut self) -> Value {
         match self.next() {
             Some(t) => match t {
+                Token::LBracket => self.array(),
                 Token::String(s) => Value::String(s),
                 Token::Number(n) => Value::Number(n),
                 Token::True => Value::Boolean(true),
